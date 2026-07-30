@@ -1,5 +1,25 @@
 # Telecom Network Performance & Customer Churn Analysis (Lagos)
 
+## Table of Contents
+- [Project Overview](#project-overview)
+- [Business Problem](#business-problem)
+- [Executive Summary](#executive-summary)
+- [Project Objectives](#project-objectives)
+- [Business Questions](#business-questions)
+- [Project Workflow](#project-workflow)
+- [Tools & Technologies](#tools--technologies)
+- [Theme 1 — Customer Churn](#theme-1--customer-churn)
+- [Theme 2 — Network Performance](#theme-2--network-performance)
+- [Theme 3 — Revenue & Customer Value](#theme-3--revenue--customer-value)
+- [Theme 4 — Customer Experience & Retention](#theme-4--customer-experience--retention)
+- [Key Findings](#key-findings)
+- [Business Recommendations](#business-recommendations)
+- [Data Limitations](#data-limitations)
+- [Expected Business Outcomes](#expected-business-outcomes)
+- [Disclaimer](#disclaimer)
+
+---
+
 ## Project Overview
 
 Customer churn is one of the most significant challenges faced by telecommunications companies. Losing existing subscribers not only reduces recurring revenue but also increases customer acquisition costs and negatively impacts long-term profitability.
@@ -10,7 +30,7 @@ The project combines multiple operational datasets—including subscriber inform
 
 ---
 
-# Business Problem
+## Business Problem
 
 The telecom operator has observed increasing subscriber churn across several areas of Lagos but lacks clear visibility into the underlying causes.
 
@@ -27,7 +47,13 @@ The objective of this project is to answer these questions using SQL analytics a
 
 ---
 
-# Project Objectives
+## Executive Summary
+
+Across 13 business questions spanning churn, network performance, revenue, and customer experience, one consistent pattern emerged: **churn in this dataset is driven by subscriber behavior, not service quality.** Declining usage (Q1) and declining recharge activity (Q10) both collapse sharply — by 80%+ — in the 30 days before a subscriber churns, and short-tenure subscribers churn at nearly 3x the rate of long-tenure ones (Q2). By contrast, network quality (Q5, Q7) and support ticket experience (Q12) show virtually no relationship with churn at the dataset-wide level, with one notable localized exception (Lakowe and Tower 319, flagged in Q6/Q8/Q9). Retention offers reach the majority of at-risk subscribers (72% of churners received one, Q4) but convert poorly — even accepted offers only retain 1 in 4 subscribers (Q13), pointing to an offer-effectiveness problem rather than an outreach or detection gap. Plan tier is by far the strongest revenue differentiator (a ~30x ARPU spread, Q11), and premium-plan subscribers also churn less, suggesting retention and upsell strategies could be combined.
+
+---
+
+## Project Objectives
 
 The project aims to:
 
@@ -40,40 +66,41 @@ The project aims to:
 
 ---
 
-# Business Questions
+## Business Questions
 
 The project answers the following business questions:
 
-## Customer Churn
+### Customer Churn
 * Does declining customer usage predict churn?
 * Which customer segments experience the highest churn?
-* Which Lagos regions have the highest churn rates?
+* Which Lagos regions and service zones have the highest churn rates?
+* How does subscriber status evolve before churn?
 
-## Network Performance
+### Network Performance
 * Do subscribers in poor-network regions churn more?
-* Which Lagos regions have both poor network performance and high churn?
+* Which Lagos regions and service zones have both poor network performance and high churn?
 * Which network KPIs are most strongly associated with churn?
 * Which cell towers consistently underperform?
 * Do network incidents increase churn?
 
-## Revenue & Customer Value
+### Revenue & Customer Value
 * Does recharge behaviour change before customers churn?
 * Which customer segments generate the highest Average Revenue Per User (ARPU)?
 
-## Customer Experience
+### Customer Experience & Retention
 * Do customer support issues contribute to churn?
 * Did retention campaigns successfully reduce churn?
 
 ---
 
-# Project Workflow
+## Project Workflow
 
 The project follows a complete analytics workflow from business understanding through reporting.
 
-## 1. Business Understanding
+### 1. Business Understanding
 Defined the business problem, project scope, and key stakeholder questions.
 
-## 2. Database Design
+### 2. Database Design
 Designed a normalized PostgreSQL database representing a realistic telecom environment, including:
 * Macro Regions
 * Service Zones
@@ -88,7 +115,7 @@ Designed a normalized PostgreSQL database representing a realistic telecom envir
 * Retention Offers
 * Mobile Plans
 
-## 3. Synthetic Data Generation
+### 3. Synthetic Data Generation
 A fully synthetic dataset was generated using predefined business rules to model realistic telemetry and behaviour, including:
 * Declining customer usage before churn
 * Network incidents causing KPI degradation
@@ -98,40 +125,27 @@ A fully synthetic dataset was generated using predefined business rules to model
 
 The final dataset contains approximately **4 million interconnected records** across multiple relational tables.
 
-## 4. Data Validation
+### 4. Data Validation
 Before analysis, the dataset was validated using SQL (`00_data_validation.sql` and `01_data_sanity_checks.sql`) to guarantee data integrity, foreign key consistency, and realistic distribution bounds.
 
-## 5. SQL Analytics
+### 5. SQL Analytics
 Business questions are answered using PostgreSQL utilizing CTEs, Window Functions, Aggregates, CASE expressions, and multi-table joins.
 
-## 6. Power BI Dashboard
+### 6. Power BI Dashboard
 SQL outputs are visualized in interactive executive dashboards tracking churn, network performance, and customer value.
 
-## 7. Business Recommendations
+### 7. Business Recommendations
 Translates analytical findings into actionable business strategies for management.
 
 ---
 
-# Tools & Technologies
+## Tools & Technologies
 
 * **PostgreSQL & SQL:** Database management, data validation, and core analytics.
 * **Power BI:** Executive dashboarding and visual storytelling.
 * **Git & GitHub:** Version control and remote repository management.
 
 ---
-
-# Expected Business Outcomes
-
-* Detect customers at risk of churning before they leave.
-* Prioritize network investments in high-impact locations.
-* Improve customer retention through targeted interventions and campaign tracking.
-* Increase customer lifetime value and recurring revenue.
-
----
-
-# Disclaimer
-
-This project uses entirely synthetic data generated for educational and portfolio purposes. While the data models realistic telecom operations and business behaviour, it does not represent any real customers or commercial telecommunications provider.
 
 ## Theme 1 — Customer Churn
 
@@ -258,6 +272,10 @@ Each subscriber's full status history was traced in chronological order to recon
 
 **Business Implication:** The 14–29 day at-risk window is short, meaning retention workflows need to trigger quickly once a subscriber is flagged. But the bigger issue this data reveals is offer *quality*, not offer *timing* — since most churners were already reached with an offer and left anyway, the business should prioritize testing better-targeted or higher-value retention offers over simply widening outreach. The current offer program is reaching people; it isn't convincing them to stay.
 
+---
+
+## Theme 2 — Network Performance
+
 ### Q5: Do subscribers in poor-network regions churn more?
 
 **Business Question:** Determine whether poor service quality is associated with higher customer churn.
@@ -352,7 +370,7 @@ Each tower was ranked independently on three dimensions — dropped call rate, a
 **Business Question:** Measure whether outages, congestion, or other service disruptions are followed by higher churn in the affected service zones.
 
 **Approach:**
-Each subscriber was flagged as having had a network incident at their home tower within the 30 days before their anchor date (churn date, or dataset end for active subscribers). 
+Each subscriber was flagged as having had a network incident at their home tower within the 30 days before their anchor date (churn date, or dataset end for active subscribers).
 
 **Data limitation discovered during analysis:** `network_incidents` contains records exclusively from 2025 — no incidents are logged for 2018-2024, despite towers being installed steadily across that period. An initial version of this query compared all subscribers regardless of anchor date, which produced a misleading result (subscribers with incidents appeared to churn *less*) purely because active subscribers are anchored to Dec 2025 by default and therefore had the only realistic chance of falling within the incident-logging window, while most churned subscribers left before 2025 and could never register an incident regardless of what happened at their tower. The analysis below is restricted to subscribers whose anchor date falls in 2025, so both groups are drawn from the same time period where incident data actually exists.
 
@@ -367,6 +385,10 @@ Each subscriber was flagged as having had a network incident at their home tower
 - This is a small but directionally consistent effect, and lines up with earlier findings: Lakowe (Q6) and Ikeja CBD & GRA (Q8) were both flagged as towers/zones with elevated incident activity and elevated churn.
 
 **Business Implication:** Network incidents do appear to modestly raise short-term churn risk, though the effect is smaller than either usage decline (Q1) or tenure (Q2). Given the data quality issue uncovered here — incidents only being logged for 2025 — this finding should be treated as directionally suggestive rather than statistically definitive; a fuller incident history across all years would allow a more robust test.
+
+---
+
+## Theme 3 — Revenue & Customer Value
 
 ### Q10: Does recharge behaviour change before customers churn?
 
@@ -438,6 +460,10 @@ Ibeju-Lekki highest (₦592.18), Ajah lowest (₦307.31) — no obvious geograph
 - **Region, zone, and age are all weak-to-moderate differentiators**, consistent with their role throughout this analysis (they mattered little for churn either).
 
 **Business Implication:** Plan tier is the clear revenue lever — upselling subscribers from entry plans (Smart Lite/Standard/Max Data, ~₦150-160/month) toward mid/premium tiers (Business Pro, Unlimited 5G, Enterprise Max) would have far more revenue impact than any geographic or demographic targeting strategy. Since high-value plans (Business Pro, Enterprise Max) also had among the lowest churn rates in Q2, retention and upsell efforts could reasonably be combined — premium-plan subscribers appear to be both more valuable and more stable.
+
+---
+
+## Theme 4 — Customer Experience & Retention
 
 ### Q12: Do customer support issues contribute to churn?
 
@@ -526,3 +552,66 @@ Retention offer outcomes were evaluated four ways: by offer type, by delivery ch
 - **The real bottleneck is the acceptance-to-recovery conversion, not offer design.** Since type and channel barely move the needle, the retention program's core weakness isn't which offer is sent or how — it's that even a "successful" (accepted) interaction only saves about 1 in 4 subscribers.
 
 **Business Implication:** The retention offer program's biggest lever isn't offer type or delivery channel — both already convert similarly. The real opportunity is improving what happens *after* acceptance, since 75% of subscribers who said yes to an offer still left. This might point to offer value being insufficient (subscribers accept but aren't satisfied enough to stay) or to underlying issues (the same usage/recharge decline from Q1/Q10) that a one-time offer doesn't actually resolve. Combined with Q4's finding that most churners were reached with an offer (72.28%) but still left, this dataset consistently points to offer *effectiveness*, not offer *reach* or *type*, as the core retention gap.
+
+---
+
+## Key Findings
+
+**Behavioral signals predict churn; service-quality signals mostly don't.**
+Usage decline (Q1), recharge decline (Q10), and tenure (Q2) were the three strongest churn predictors found in this analysis, each showing large, consistent effects. Network KPIs (Q5, Q7) and support ticket experience (Q12) showed no meaningful relationship with churn at the subscriber level — a finding that held up even after controlling for confounds like tenure and time-period artifacts.
+
+**Where network quality does matter, it's localized, not systemic.**
+Q6 and Q8 both independently flagged Lakowe (zone) and Tower 319 in Ikeja CBD & GRA as consistent underperformers on network KPIs and incidents — and Ikeja also ranked among the highest-volume churn contributors (Q3). Q9 confirmed a modest (~1 point) churn increase following nearby incidents, once a data quality issue (incidents only logged for 2025) was corrected. This suggests network quality is a real but narrow driver, concentrated in specific infrastructure, not a broad churn cause.
+
+**Retention offers reach people but don't convert.**
+72.28% of churned subscribers received a retention offer before leaving (Q4), and 54.61% of all offers were accepted (Q13) — so outreach and acceptance aren't the bottleneck. But even accepted offers only produced a 24.75% recovery rate, and offer type/channel showed minimal differentiation (Q13). The gap is in offer effectiveness, not offer reach.
+
+**Revenue and churn both concentrate around plan tier.**
+Plan generated the widest spread seen in either churn or revenue analysis — premium plans (Enterprise Max, Unlimited 5G) showed both meaningfully lower churn (Q2) and ~30x higher ARPU (Q11) than entry-level plans, making plan tier the single most commercially significant segment in the dataset.
+
+**Geography matters more at the zone level than the region level.**
+Macro region was consistently flat across every dimension tested (churn, revenue, network quality). Service zone showed real, if moderate, variation — meaning localized, zone-level strategy is more actionable than broad regional campaigns.
+
+---
+
+## Business Recommendations
+
+1. **Build a usage + recharge decline early-warning trigger.** (Q1, Q10) Since both signals collapse sharply and in tandem before churn, a combined-decline threshold could flag at-risk subscribers earlier and more reliably than waiting for formal "At Risk" status assignment.
+
+2. **Redesign the retention offer value proposition, not the outreach process.** (Q4, Q13) Outreach and acceptance are already high; the failure point is post-acceptance retention. Investigate whether offers address the subscriber's actual reason for leaving, or test higher-value/longer-duration offers against the current set.
+
+3. **Prioritize the first 6-12 months of the subscriber lifecycle for retention investment.** (Q2) Churn risk is 2-3x higher in this window than the 2+ year baseline — onboarding and early engagement programs would target the highest-risk period directly.
+
+4. **Direct infrastructure investment to Tower 319 (Ikeja CBD & GRA) and Lakowe.** (Q6, Q8, Q9) These are the only consistent, multi-metric network underperformers in the dataset, and both show early signs of an associated churn effect.
+
+5. **Use zone-level, not region-level, targeting for any geographic strategy.** (Q3, Q6, Q11) Macro region is consistently flat across churn, network quality, and revenue; meaningful variation only appears at the service zone level.
+
+6. **Pair retention efforts with upsell strategy on premium plans.** (Q2, Q11) Premium-plan subscribers are both lower-churn and higher-revenue, making plan upgrade campaigns a dual-purpose lever rather than a tradeoff between retention and revenue goals.
+
+7. **Deprioritize network- and support-experience-based churn interventions at the broad level.** (Q5, Q7, Q12) Neither shows a dataset-wide churn relationship; resources aimed at "improving network quality to reduce churn" or "improving support resolution speed to reduce churn" are unlikely to move the needle outside the specific towers/zones already flagged.
+
+---
+
+## Data Limitations
+
+- **Network incidents are only logged for 2025** — no incident records exist for 2018-2024, despite towers being installed steadily across that period. Q9's analysis was restricted to subscribers with a 2025 anchor date to avoid a misleading result caused by this gap; a fuller incident history would allow a more robust test of incident-churn timing.
+- **Recharges are the only available revenue signal.** This schema has no separate postpaid billing/subscription table, so recharge spend was used as a revenue proxy for both prepaid and postpaid subscribers in Q10 and Q11. This likely understates true postpaid revenue, which would typically be dominated by a recurring monthly fee rather than ad hoc recharges.
+- **~2% of subscriber records have missing gender and age data** (2,041 and 1,984 subscribers respectively). These were retained in overall totals but excluded from gender- and age-specific comparisons due to small, unstable sample sizes.
+- **Recharge history is sparse for a large share of subscribers.** Fewer than half of all subscribers (47,077 of 100,000) had sufficient recharge history (60+ days) to qualify for the before/after comparison in Q10, since recharges are infrequent, irregular events rather than daily activity.
+
+---
+
+## Expected Business Outcomes
+
+Based on the findings above, this analysis supports the following outcomes if acted on:
+
+* **Earlier churn detection** — a combined usage-and-recharge decline trigger (Q1, Q10) can flag at-risk subscribers before formal "At Risk" status is assigned, within the narrow 14-29 day risk-to-churn window identified in Q4.
+* **Targeted, not blanket, network investment** — infrastructure spend directed at the specific underperforming assets identified (Tower 319, Lakowe) rather than broad regional rollouts, since network quality was not found to be a systemic churn driver.
+* **A retention program redesigned around offer effectiveness** — since outreach and acceptance are already high but post-acceptance recovery is low (24.75%), improving offer value and follow-through stands to meaningfully increase the number of retained subscribers per offer sent, rather than requiring more offers to be sent.
+* **Increased customer lifetime value through plan-tier strategy** — combining retention and upsell efforts around premium plans, which this analysis found to be both lower-churn and substantially higher-revenue.
+
+---
+
+## Disclaimer
+
+This project uses entirely synthetic data generated personally for educational and portfolio purposes. While the data models realistic telecom operations and business behaviour, it does not represent any real customers or commercial telecommunications provider.
