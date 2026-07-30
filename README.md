@@ -257,3 +257,113 @@ Each subscriber's full status history was traced in chronological order to recon
 - **Most churners were reached, but not retained.** 72.28% of all churned subscribers did receive a retention offer before leaving — so the gap isn't primarily about *detection* or *outreach coverage*, it's about *offer effectiveness*. A smaller share (27.72%) churned without ever reaching the offer stage, which may point to a secondary gap in reaction speed for a subset of at-risk subscribers.
 
 **Business Implication:** The 14–29 day at-risk window is short, meaning retention workflows need to trigger quickly once a subscriber is flagged. But the bigger issue this data reveals is offer *quality*, not offer *timing* — since most churners were already reached with an offer and left anyway, the business should prioritize testing better-targeted or higher-value retention offers over simply widening outreach. The current offer program is reaching people; it isn't convincing them to stay.
+
+### Q5: Do subscribers in poor-network regions churn more?
+
+**Business Question:** Determine whether poor service quality is associated with higher customer churn.
+
+**Approach:**
+Each subscriber's home tower's network KPIs (signal strength, dropped call rate, latency, packet loss, availability) were averaged across the full dataset period, then compared between churned and active subscribers.
+
+**Findings:**
+
+| Metric | Active Subscribers | Churned Subscribers |
+|---|---|---|
+| Subscriber count | 84,616 | 15,384 |
+| Avg Signal Strength (RSRP, dBm) | -95.01 | -95.02 |
+| Avg Dropped Call Rate (%) | 1.03 | 1.03 |
+| Avg Latency (ms) | 38.59 | 38.58 |
+| Avg Packet Loss (%) | 0.93 | 0.93 |
+| Avg Availability (%) | 98.37 | 98.37 |
+
+- **No meaningful difference in lifetime-average network quality** between churned and active subscribers across any KPI.
+- **Important caveat:** this analysis uses each tower's *full-period* average KPI, which likely dilutes short-term network degradation (e.g., a bad month right before a subscriber churns gets averaged against years of normal performance). A tower-lifetime average is not the same as "the network quality this subscriber actually experienced leading up to their churn decision."
+
+**Business Implication:** At the lifetime-average level, network quality does not appear to be a broad churn driver — this by itself doesn't support a blanket "invest in weak towers" strategy. However, this finding should not be read as "network quality never matters" — it specifically means *long-run average* quality isn't the driver. Q6 (regional quality vs. churn) and Q9 (network incidents vs. churn timing) will test whether *localized* or *time-proximate* network problems tell a different story than the lifetime average does.
+
+### Q6: Which regions and service zones have both poor network performance and high churn?
+
+**Business Question:** Combine network KPIs with churn rates to identify priority investment zones.
+
+**Approach:**
+Network KPIs were aggregated to the service zone level (across all towers in each zone) and combined with the zone-level churn rates from Q3. Zones were ranked separately on churn rate, dropped call rate, and availability, then a combined rank score (sum of the three individual ranks) was used to surface zones performing poorly on all three dimensions simultaneously — not just one metric in isolation.
+
+**Findings:**
+
+| Zone | Region | Churn Rate | Churn Rank | Dropped Call Rate | Availability | Combined Score |
+|---|---|---|---|---|---|---|
+| **Lakowe** | Lagos Island | 16.97% | 1 | 1.08% | 98.21% | **3** |
+| Victoria Island | Lagos Island | 15.82% | 6 | 1.05% | 98.35% | 14 |
+| Surulere | Central Mainland | 16.39% | 3 | 1.04% | 98.35% | 14 |
+| Festac/Amuwo-Odofin | Western Mainland | 15.88% | 5 | 1.04% | 98.35% | 16 |
+
+- **Lakowe is a genuine, isolated hotspot** — it ranks #1 (worst) on churn rate, #1 (worst) on dropped call rate, and #1 (worst) on availability, giving it a combined score of 3, far ahead of the next-worst zone (score 14).
+- **The effect size is modest, not dramatic.** Lakowe's dropped call rate (1.08%) is only marginally worse than the 8th-10th ranked zones (1.03-1.04%), and its availability (98.21%) is close to the others (98.32-98.36%). Lakowe is consistently the worst performer, but by a small margin — this is a real signal, not a severe outage.
+- **This reconciles with Q5's null result.** Q5 found no subscriber-level correlation between network quality and churn because that signal gets diluted across 26 zones of mostly-similar performance. Q6 shows that aggregating to the zone level surfaces one real (if modest) pattern that individual-subscriber averaging washed out.
+
+**Business Implication:** Lakowe is the clearest candidate for network infrastructure investment — it's the only zone where poor network quality and high churn consistently co-occur. However, given the modest gap in absolute KPI terms, this should be treated as a monitoring priority and a candidate for deeper investigation (e.g., checking `network_incidents` for Lakowe specifically) rather than a zone requiring emergency intervention.
+
+### Q7: Which network KPIs have the strongest relationship with churn?
+
+**Business Question:** Compare metrics such as dropped call rate, signal strength, latency, and packet loss to determine which most strongly correlates with customer loss.
+
+**Approach:**
+Pearson correlation coefficients were computed between each subscriber's home-tower lifetime-average KPI and their churn outcome (coded as 1/0).
+
+**Findings:**
+
+| KPI | Correlation with Churn |
+|---|---|
+| Signal Strength (RSRP) | -0.0034 |
+| Dropped Call Rate | -0.0008 |
+| Latency | -0.0017 |
+| Packet Loss | 0.0021 |
+| Availability | -0.0002 |
+
+- **None of the five network KPIs show any meaningful linear relationship with churn.** Every coefficient is within ±0.0034 of zero — for reference, correlations are generally not considered meaningful until they exceed roughly ±0.1, so these are an order of magnitude below any usable threshold.
+- **This confirms and quantifies Q5's finding.** At the lifetime-average, subscriber level, network quality is not a churn driver in this dataset — full stop.
+
+**Business Implication:** Lifetime-average network KPIs at a subscriber's home tower are not a useful churn predictor and should not be used as a standalone input to churn risk models. This reinforces the Q6 finding that network-related churn (where it exists, as with Lakowe) is a localized, zone-specific pattern — not a broad, dataset-wide relationship. Combined with Q1's finding that *usage decline* is a strong predictor, this suggests churn in this dataset is driven primarily by subscriber behavior, not infrastructure quality.
+
+### Q8: Which cell towers consistently underperform?
+
+**Business Question:** Identify towers with recurring poor KPIs or repeated network incidents to prioritize maintenance or upgrades.
+
+**Approach:**
+Each tower was ranked independently on three dimensions — dropped call rate, availability, and total incident count — then combined into a single underperformance score (sum of the three ranks) to surface towers with a persistent, multi-dimensional pattern of poor performance rather than a single bad metric or one-off event.
+
+**Findings:**
+
+| Tower | Zone | Region | Tech | Dropped Call Rate | Availability | Total Incidents | High-Severity Incidents | Downtime (hrs) | Combined Score |
+|---|---|---|---|---|---|---|---|---|---|
+| **319** | Ikeja (CBD & GRA) | Central Mainland | 4G | 1.13% | 97.80% | 22 | 4 | 198 | **36** |
+| 33 | Victoria Island | Lagos Island | 4G | 1.17% | 98.01% | 16 | 2 | 89 | 112 |
+| 247 | Lakowe | Lagos Island | 5G | 1.10% | 98.02% | 18 | 3 | 90 | 127 |
+| 459 | Ebute Metta | Central Mainland | 4G | 1.10% | 98.08% | 20 | 5 | 193 | 130 |
+
+- **Tower 319 (Ikeja CBD & GRA) is a clear, isolated worst performer** — its combined score (36) is more than 3x worse than the next tower (112), and it leads on every individual metric: highest dropped call rate, lowest availability, most incidents overall, and most high-severity incidents.
+- **Lakowe's tower (247) also appears here**, consistent with it being flagged as a churn/network hotspot in Q6 — reinforcing that Lakowe's issue isn't isolated to one KPI snapshot but shows up independently in incident-based analysis too.
+- **Ikeja (CBD & GRA) is notable for a different reason:** it was also the 2nd-largest contributor to total churn volume in Q3 (8.00% of all churned subscribers). Given Q7 found no dataset-wide correlation between network KPIs and churn, this overlap should be treated as worth investigating further, not as proof the tower's poor performance is driving churn there.
+
+**Business Implication:** Tower 319 (Ikeja CBD & GRA) should be the top priority for infrastructure investment — it's a consistent, multi-dimensional underperformer with the highest downtime in the dataset. Lakowe's tower is a secondary priority, consistent with earlier findings. Given the overlap between Ikeja's poor network performance and its high churn volume, a targeted before/after analysis of that specific tower (rather than the dataset-wide averages used in Q5/Q7) could clarify whether localized infrastructure investment there would meaningfully reduce churn.
+
+### Q9: Do network incidents increase churn?
+
+**Business Question:** Measure whether outages, congestion, or other service disruptions are followed by higher churn in the affected service zones.
+
+**Approach:**
+Each subscriber was flagged as having had a network incident at their home tower within the 30 days before their anchor date (churn date, or dataset end for active subscribers). 
+
+**Data limitation discovered during analysis:** `network_incidents` contains records exclusively from 2025 — no incidents are logged for 2018-2024, despite towers being installed steadily across that period. An initial version of this query compared all subscribers regardless of anchor date, which produced a misleading result (subscribers with incidents appeared to churn *less*) purely because active subscribers are anchored to Dec 2025 by default and therefore had the only realistic chance of falling within the incident-logging window, while most churned subscribers left before 2025 and could never register an incident regardless of what happened at their tower. The analysis below is restricted to subscribers whose anchor date falls in 2025, so both groups are drawn from the same time period where incident data actually exists.
+
+**Findings:**
+
+| Had Incident in Prior 30 Days | Subscribers | Churned | Churn Rate |
+|---|---|---|---|
+| Yes | 53,125 | 4,294 | 8.08% |
+| No | 38,478 | 2,693 | 7.00% |
+
+- **Subscribers with a recent network incident at their home tower churned at a modestly higher rate** (8.08% vs. 7.00%) — a ~1.08 percentage point, or roughly 15% relative, increase.
+- This is a small but directionally consistent effect, and lines up with earlier findings: Lakowe (Q6) and Ikeja CBD & GRA (Q8) were both flagged as towers/zones with elevated incident activity and elevated churn.
+
+**Business Implication:** Network incidents do appear to modestly raise short-term churn risk, though the effect is smaller than either usage decline (Q1) or tenure (Q2). Given the data quality issue uncovered here — incidents only being logged for 2025 — this finding should be treated as directionally suggestive rather than statistically definitive; a fuller incident history across all years would allow a more robust test.

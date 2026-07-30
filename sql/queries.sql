@@ -340,3 +340,280 @@ SELECT
 FROM ordered_path
 GROUP BY is_churned, lifecycle_path
 ORDER BY is_churned DESC, subscriber_count DESC;
+
+-- Q5: Do subscribers in poor-network regions churn more?
+-- Compares average network KPIs (at each subscriber's home tower) between
+-- churned and active subscribers, to test whether network quality correlates with churn.
+
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+tower_avg_kpis AS (
+    SELECT
+        cell_tower_id,
+        ROUND(AVG(signal_strength_rsrp), 2) AS avg_signal_rsrp,
+        ROUND(AVG(dropped_call_rate_pct), 2) AS avg_dropped_call_rate,
+        ROUND(AVG(latency_ms), 2) AS avg_latency,
+        ROUND(AVG(packet_loss_pct), 2) AS avg_packet_loss,
+        ROUND(AVG(availability_pct), 2) AS avg_availability
+    FROM network_kpis
+    GROUP BY cell_tower_id
+),
+
+subscriber_network_quality AS (
+    SELECT
+        s.subscriber_id,
+        (cf.subscriber_id IS NOT NULL) AS is_churned,
+        tk.avg_signal_rsrp,
+        tk.avg_dropped_call_rate,
+        tk.avg_latency,
+        tk.avg_packet_loss,
+        tk.avg_availability
+    FROM subscribers s
+    JOIN tower_avg_kpis tk ON tk.cell_tower_id = s.home_tower_id
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = s.subscriber_id
+)
+
+SELECT
+    is_churned,
+    COUNT(*) AS subscriber_count,
+    ROUND(AVG(avg_signal_rsrp), 2) AS avg_signal_rsrp,
+    ROUND(AVG(avg_dropped_call_rate), 2) AS avg_dropped_call_rate_pct,
+    ROUND(AVG(avg_latency), 2) AS avg_latency_ms,
+    ROUND(AVG(avg_packet_loss), 2) AS avg_packet_loss_pct,
+    ROUND(AVG(avg_availability), 2) AS avg_availability_pct
+FROM subscriber_network_quality
+GROUP BY is_churned
+ORDER BY is_churned;
+
+-- Q6: Zones with both poor network performance AND high churn
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+zone_churn AS (
+    SELECT
+        sz.service_zone_id,
+        sz.zone_name,
+        mr.macro_region_name,
+        COUNT(*) AS total_subscribers,
+        COUNT(*) FILTER (WHERE cf.subscriber_id IS NOT NULL) AS churned_subscribers,
+        ROUND(100.0 * COUNT(*) FILTER (WHERE cf.subscriber_id IS NOT NULL) / COUNT(*), 2) AS churn_rate_pct
+    FROM subscribers s
+    JOIN service_zones sz ON sz.service_zone_id = s.service_zone_id
+    JOIN macro_regions mr ON mr.macro_region_id = sz.macro_region_id
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = s.subscriber_id
+    GROUP BY sz.service_zone_id, sz.zone_name, mr.macro_region_name
+),
+
+zone_network_quality AS (
+    SELECT
+        ct.service_zone_id,
+        ROUND(AVG(nk.signal_strength_rsrp), 2) AS avg_signal_rsrp,
+        ROUND(AVG(nk.dropped_call_rate_pct), 2) AS avg_dropped_call_rate,
+        ROUND(AVG(nk.latency_ms), 2) AS avg_latency,
+        ROUND(AVG(nk.packet_loss_pct), 2) AS avg_packet_loss,
+        ROUND(AVG(nk.availability_pct), 2) AS avg_availability
+    FROM cell_towers ct
+    JOIN network_kpis nk ON nk.cell_tower_id = ct.cell_tower_id
+    GROUP BY ct.service_zone_id
+),
+
+ranked AS (
+    SELECT
+        zc.zone_name,
+        zc.macro_region_name,
+        zc.total_subscribers,
+        zc.churn_rate_pct,
+        znq.avg_dropped_call_rate,
+        znq.avg_latency,
+        znq.avg_packet_loss,
+        znq.avg_availability,
+        RANK() OVER (ORDER BY zc.churn_rate_pct DESC) AS churn_rank,
+        RANK() OVER (ORDER BY znq.avg_dropped_call_rate DESC) AS dropped_call_rank,
+        RANK() OVER (ORDER BY znq.avg_availability ASC) AS availability_rank
+    FROM zone_churn zc
+    JOIN zone_network_quality znq ON znq.service_zone_id = zc.service_zone_id
+)
+
+SELECT
+    zone_name,
+    macro_region_name,
+    total_subscribers,
+    churn_rate_pct,
+    churn_rank,
+    avg_dropped_call_rate,
+    dropped_call_rank,
+    avg_availability,
+    availability_rank,
+    (churn_rank + dropped_call_rank + availability_rank) AS combined_rank_score
+FROM ranked
+ORDER BY combined_rank_score ASC
+LIMIT 10;
+
+-- Q7: Which network KPIs have the strongest relationship with churn?
+-- Computes Pearson correlation between each subscriber's home-tower KPI
+-- (lifetime average) and their churn outcome (1 = churned, 0 = active).
+-- |r| closer to 1 = stronger relationship; sign shows direction.
+
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+tower_avg_kpis AS (
+    SELECT
+        cell_tower_id,
+        AVG(signal_strength_rsrp) AS avg_signal_rsrp,
+        AVG(dropped_call_rate_pct) AS avg_dropped_call_rate,
+        AVG(latency_ms) AS avg_latency,
+        AVG(packet_loss_pct) AS avg_packet_loss,
+        AVG(availability_pct) AS avg_availability
+    FROM network_kpis
+    GROUP BY cell_tower_id
+),
+
+subscriber_network_quality AS (
+    SELECT
+        s.subscriber_id,
+        CASE WHEN cf.subscriber_id IS NOT NULL THEN 1 ELSE 0 END AS churned_flag,
+        tk.avg_signal_rsrp,
+        tk.avg_dropped_call_rate,
+        tk.avg_latency,
+        tk.avg_packet_loss,
+        tk.avg_availability
+    FROM subscribers s
+    JOIN tower_avg_kpis tk ON tk.cell_tower_id = s.home_tower_id
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = s.subscriber_id
+)
+
+SELECT
+    ROUND(CORR(avg_signal_rsrp, churned_flag)::numeric, 4) AS corr_signal_rsrp,
+    ROUND(CORR(avg_dropped_call_rate, churned_flag)::numeric, 4) AS corr_dropped_call_rate,
+    ROUND(CORR(avg_latency, churned_flag)::numeric, 4) AS corr_latency,
+    ROUND(CORR(avg_packet_loss, churned_flag)::numeric, 4) AS corr_packet_loss,
+    ROUND(CORR(avg_availability, churned_flag)::numeric, 4) AS corr_availability
+FROM subscriber_network_quality;
+
+-- Q8: Which cell towers consistently underperform?
+-- Combines average KPI quality with incident frequency/severity to identify
+-- towers with a persistent pattern of poor performance, not just a one-off event.
+
+WITH tower_kpi_summary AS (
+    SELECT
+        cell_tower_id,
+        ROUND(AVG(signal_strength_rsrp), 2) AS avg_signal_rsrp,
+        ROUND(AVG(dropped_call_rate_pct), 2) AS avg_dropped_call_rate,
+        ROUND(AVG(latency_ms), 2) AS avg_latency,
+        ROUND(AVG(packet_loss_pct), 2) AS avg_packet_loss,
+        ROUND(AVG(availability_pct), 2) AS avg_availability
+    FROM network_kpis
+    GROUP BY cell_tower_id
+),
+
+tower_incident_summary AS (
+    SELECT
+        cell_tower_id,
+        COUNT(*) AS total_incidents,
+        COUNT(*) FILTER (WHERE severity = 'High') AS high_severity_incidents,
+        ROUND(AVG(duration_hours), 2) AS avg_incident_duration_hrs,
+        SUM(duration_hours) AS total_downtime_hrs
+    FROM network_incidents
+    GROUP BY cell_tower_id
+),
+
+combined AS (
+    SELECT
+        ct.cell_tower_id,
+        sz.zone_name,
+        mr.macro_region_name,
+        ct.technology,
+        tk.avg_dropped_call_rate,
+        tk.avg_latency,
+        tk.avg_packet_loss,
+        tk.avg_availability,
+        COALESCE(ti.total_incidents, 0) AS total_incidents,
+        COALESCE(ti.high_severity_incidents, 0) AS high_severity_incidents,
+        COALESCE(ti.total_downtime_hrs, 0) AS total_downtime_hrs,
+        RANK() OVER (ORDER BY tk.avg_dropped_call_rate DESC) AS dropped_call_rank,
+        RANK() OVER (ORDER BY tk.avg_availability ASC) AS availability_rank,
+        RANK() OVER (ORDER BY COALESCE(ti.total_incidents, 0) DESC) AS incident_count_rank
+    FROM cell_towers ct
+    JOIN service_zones sz ON sz.service_zone_id = ct.service_zone_id
+    JOIN macro_regions mr ON mr.macro_region_id = sz.macro_region_id
+    JOIN tower_kpi_summary tk ON tk.cell_tower_id = ct.cell_tower_id
+    LEFT JOIN tower_incident_summary ti ON ti.cell_tower_id = ct.cell_tower_id
+)
+
+SELECT
+    cell_tower_id,
+    zone_name,
+    macro_region_name,
+    technology,
+    avg_dropped_call_rate,
+    avg_availability,
+    total_incidents,
+    high_severity_incidents,
+    total_downtime_hrs,
+    (dropped_call_rank + availability_rank + incident_count_rank) AS combined_underperformance_score
+FROM combined
+ORDER BY combined_underperformance_score ASC
+LIMIT 15;
+
+-- Q9 (v2): Do network incidents increase churn?
+-- Restricted to subscribers whose anchor date falls in 2025, since that's
+-- the only year with incident data recorded. This avoids the artifact where
+-- "no incident nearby" was really just "anchor date predates all incident records."
+
+WITH churn_info AS (
+    SELECT
+        subscriber_id,
+        MAX(status_date) AS churn_date
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+    GROUP BY subscriber_id
+),
+
+anchors AS (
+    SELECT
+        s.subscriber_id,
+        s.home_tower_id,
+        (ci.subscriber_id IS NOT NULL) AS is_churned,
+        COALESCE(ci.churn_date, DATE '2025-12-31') AS anchor_date
+    FROM subscribers s
+    LEFT JOIN churn_info ci ON ci.subscriber_id = s.subscriber_id
+),
+
+anchors_2025 AS (
+    SELECT *
+    FROM anchors
+    WHERE anchor_date >= DATE '2025-01-01'
+),
+
+incident_exposure AS (
+    SELECT
+        a.subscriber_id,
+        a.is_churned,
+        EXISTS (
+            SELECT 1
+            FROM network_incidents ni
+            WHERE ni.cell_tower_id = a.home_tower_id
+              AND ni.incident_date BETWEEN a.anchor_date - INTERVAL '30 days' AND a.anchor_date
+        ) AS had_incident_last_30_days
+    FROM anchors_2025 a
+)
+
+SELECT
+    had_incident_last_30_days,
+    COUNT(*) AS total_subscribers,
+    COUNT(*) FILTER (WHERE is_churned) AS churned_subscribers,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE is_churned) / COUNT(*), 2) AS churn_rate_pct
+FROM incident_exposure
+GROUP BY had_incident_last_30_days
+ORDER BY had_incident_last_30_days DESC;
