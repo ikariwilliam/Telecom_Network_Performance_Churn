@@ -367,3 +367,74 @@ Each subscriber was flagged as having had a network incident at their home tower
 - This is a small but directionally consistent effect, and lines up with earlier findings: Lakowe (Q6) and Ikeja CBD & GRA (Q8) were both flagged as towers/zones with elevated incident activity and elevated churn.
 
 **Business Implication:** Network incidents do appear to modestly raise short-term churn risk, though the effect is smaller than either usage decline (Q1) or tenure (Q2). Given the data quality issue uncovered here — incidents only being logged for 2025 — this finding should be treated as directionally suggestive rather than statistically definitive; a fuller incident history across all years would allow a more robust test.
+
+### Q10: Does recharge behaviour change before customers churn?
+
+**Business Question:** Determine whether customers begin recharging less frequently or spending less before leaving.
+
+**Approach:**
+Same methodology as Q1 — recharge count and total amount were compared across two 30-day windows relative to each subscriber's anchor date (churn date, or dataset end for active subscribers). Subscribers without at least 60 days of recharge history before their anchor date were excluded.
+
+**Findings:**
+
+| Segment | Subscribers | Avg Prior Recharges | Avg Recent Recharges | Count Δ% | Avg Prior Amount (₦) | Avg Recent Amount (₦) | Amount Δ% |
+|---|---|---|---|---|---|---|---|
+| Active | 44,787 | 0.07 | 0.07 | -1.4% | 418.06 | 418.88 | +0.2% |
+| Churned | 2,290 | 0.05 | 0.01 | -83.6% | 257.42 | 46.72 | -81.8% |
+
+- **Active subscribers show flat recharge behavior** across both windows — consistent with the flat usage pattern from Q1.
+- **Churned subscribers show a sharp recharge collapse** in the 30 days before churn — frequency down 83.6%, spend down 81.8%. This mirrors the usage-decline pattern from Q1 almost exactly in magnitude.
+- **A baseline gap exists even before the collapse**, same as Q1 — churned subscribers recharged less often and spent less even in the earlier window (0.05 vs. 0.07 recharges; ₦257 vs. ₦418), suggesting lower engagement precedes the acute drop-off.
+
+**Data limitation:** Fewer than half of all subscribers (47,077 of 100,000) had sufficient recharge history (60+ days before their anchor date) to qualify for this comparison, since recharges are sparse and irregular compared to daily usage records. This finding is directionally strong but reflects the more active/frequent-recharging portion of the subscriber base rather than the full population.
+
+**Business Implication:** Recharge behavior is a second strong, independently-confirming early warning signal alongside usage decline (Q1) — both usage and revenue-generating behavior collapse in tandem shortly before churn. This reinforces that a combined usage-and-recharge decline trigger would be a strong candidate for a proactive retention system, since the two signals corroborate each other rather than relying on just one metric.
+
+### Q11: Which customer segments generate the highest ARPU?
+
+**Business Question:** Compare revenue across plans, macro regions, service zones, customer tenure, and age groups to identify the most valuable subscriber segments.
+
+**Approach:**
+Revenue was measured via total recharge amount per subscriber (the only revenue signal available in this schema — there is no separate postpaid billing table). For plan, region, zone, and age, monthly ARPU (total revenue ÷ tenure in months) was calculated and averaged per segment. For tenure itself, monthly-rate extrapolation was found to be misleading (see note below) and total lifetime revenue is reported instead.
+
+**Data investigation note:** An initial tenure-band ARPU calculation showed 0-3 month subscribers with ~30x higher "monthly ARPU" than 2+ year subscribers. Investigation showed this wasn't a real spending difference — recharge count (~0.7-0.8 recharges) and total revenue (~₦3,769-4,737) are nearly identical across all tenure bands. The apparent gap was purely a division artifact: similar total revenue divided by a much smaller tenure-in-months denominator for newer subscribers mechanically inflates their extrapolated "monthly rate." Recharge revenue in this dataset does not scale with tenure, so a monthly-rate framing was dropped in favor of reporting raw totals for this dimension.
+
+**Findings:**
+
+*By Plan (strongest differentiator):*
+
+| Plan | Subscribers | Avg Monthly ARPU (₦) |
+|---|---|---|
+| Enterprise Max | 998 | 4,652.80 |
+| Unlimited 5G | 1,989 | 3,846.83 |
+| Business Pro | 5,081 | 2,150.75 |
+| Business Lite | 6,001 | 1,099.59 |
+| Smart Plus | 18,048 | 159.07 |
+| Smart Lite | 34,908 | 158.19 |
+| Smart Standard | 24,974 | 153.14 |
+| Max Data | 8,001 | 150.52 |
+
+*By Macro Region (weak differentiator, ₦416-469 range):*
+Northern Mainland highest (₦469.38), Central Mainland lowest (₦415.86) — roughly flat.
+
+*By Age Band (weak differentiator, ₦405-534 range):*
+Unknown/null-age group highest (₦534.29, small-N caveat), 44-56 highest of known bands (₦462.51), 57-70 lowest (₦405.22).
+
+*By Service Zone (moderate spread, ₦307-592 range):*
+Ibeju-Lekki highest (₦592.18), Ajah lowest (₦307.31) — no obvious geographic clustering pattern.
+
+*By Tenure (total lifetime revenue, not monthly rate):*
+
+| Tenure Band | Subscribers | Avg Recharge Count | Avg Total Revenue (₦) | Avg per Recharge (₦) |
+|---|---|---|---|---|
+| 0-3 months | 5,869 | 0.72 | 4,347.16 | 6,042.99 |
+| 3-6 months | 7,596 | 0.75 | 4,294.30 | 5,757.06 |
+| 6-12 months | 13,704 | 0.77 | 4,341.62 | 5,622.52 |
+| 1-2 years | 11,921 | 0.69 | 3,769.31 | 5,485.78 |
+| 2+ years | 59,799 | 0.81 | 4,736.68 | 5,867.88 |
+
+- **Plan tier is overwhelmingly the strongest revenue driver** — roughly a 30x spread between Enterprise Max/Unlimited 5G and the entry-level plans, far larger than any churn-related dimension we've examined.
+- **Recharge behavior is essentially flat across tenure**, both in count (~0.7-0.8 recharges) and total spend (~₦3,769-4,737) — tenure does not meaningfully predict how much a subscriber recharges.
+- **Region, zone, and age are all weak-to-moderate differentiators**, consistent with their role throughout this analysis (they mattered little for churn either).
+
+**Business Implication:** Plan tier is the clear revenue lever — upselling subscribers from entry plans (Smart Lite/Standard/Max Data, ~₦150-160/month) toward mid/premium tiers (Business Pro, Unlimited 5G, Enterprise Max) would have far more revenue impact than any geographic or demographic targeting strategy. Since high-value plans (Business Pro, Enterprise Max) also had among the lowest churn rates in Q2, retention and upsell efforts could reasonably be combined — premium-plan subscribers appear to be both more valuable and more stable.

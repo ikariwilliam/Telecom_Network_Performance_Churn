@@ -617,3 +617,181 @@ SELECT
 FROM incident_exposure
 GROUP BY had_incident_last_30_days
 ORDER BY had_incident_last_30_days DESC;
+
+-- Q10: Does recharge behaviour change before customers churn?
+
+WITH churn_info AS (
+    SELECT
+        subscriber_id,
+        MAX(status_date) AS churn_date
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+    GROUP BY subscriber_id
+),
+
+anchors AS (
+    SELECT
+        s.subscriber_id,
+        (ci.subscriber_id IS NOT NULL) AS is_churned,
+        COALESCE(ci.churn_date, DATE '2025-12-31') AS anchor_date
+    FROM subscribers s
+    LEFT JOIN churn_info ci ON ci.subscriber_id = s.subscriber_id
+),
+
+recharge_windows AS (
+    SELECT
+        a.subscriber_id,
+        a.is_churned,
+        a.anchor_date,
+        COUNT(*) FILTER (WHERE r.recharge_date > a.anchor_date - INTERVAL '30 days'
+                              AND r.recharge_date <= a.anchor_date) AS recent_recharge_count,
+        SUM(r.amount_ngn) FILTER (WHERE r.recharge_date > a.anchor_date - INTERVAL '30 days'
+                              AND r.recharge_date <= a.anchor_date) AS recent_recharge_amount,
+        COUNT(*) FILTER (WHERE r.recharge_date > a.anchor_date - INTERVAL '60 days'
+                              AND r.recharge_date <= a.anchor_date - INTERVAL '30 days') AS prior_recharge_count,
+        SUM(r.amount_ngn) FILTER (WHERE r.recharge_date > a.anchor_date - INTERVAL '60 days'
+                              AND r.recharge_date <= a.anchor_date - INTERVAL '30 days') AS prior_recharge_amount,
+        MIN(r.recharge_date) AS earliest_recharge
+    FROM anchors a
+    JOIN recharges r ON r.subscriber_id = a.subscriber_id
+    GROUP BY a.subscriber_id, a.is_churned, a.anchor_date
+),
+
+qualified AS (
+    SELECT
+        rw.subscriber_id,
+        rw.is_churned,
+        rw.recent_recharge_count,
+        rw.recent_recharge_amount,
+        rw.prior_recharge_count,
+        rw.prior_recharge_amount
+    FROM recharge_windows rw
+    WHERE rw.earliest_recharge <= rw.anchor_date - INTERVAL '59 days'
+)
+
+SELECT
+    is_churned,
+    COUNT(*) AS subscriber_count,
+    ROUND(AVG(COALESCE(prior_recharge_count, 0)), 2) AS avg_prior_recharge_count,
+    ROUND(AVG(COALESCE(recent_recharge_count, 0)), 2) AS avg_recent_recharge_count,
+    ROUND(100.0 * (AVG(COALESCE(recent_recharge_count,0)) - AVG(COALESCE(prior_recharge_count,0)))
+          / NULLIF(AVG(COALESCE(prior_recharge_count,0)), 0), 1) AS recharge_count_pct_change,
+    ROUND(AVG(COALESCE(prior_recharge_amount, 0)), 2) AS avg_prior_recharge_amount_ngn,
+    ROUND(AVG(COALESCE(recent_recharge_amount, 0)), 2) AS avg_recent_recharge_amount_ngn,
+    ROUND(100.0 * (AVG(COALESCE(recent_recharge_amount,0)) - AVG(COALESCE(prior_recharge_amount,0)))
+          / NULLIF(AVG(COALESCE(prior_recharge_amount,0)), 0), 1) AS recharge_amount_pct_change
+FROM qualified
+GROUP BY is_churned
+ORDER BY is_churned;
+
+-- Q11: Which customer segments generate the highest ARPU (Average Revenue Per User)?
+-- Revenue is based on recharges, as this schema has no separate billing/subscription
+-- revenue table. For plan, region, zone, and age, monthly ARPU (total revenue / tenure
+-- in months) is used. For tenure itself, monthly-rate extrapolation was found to be
+-- misleading (recharge count and total revenue are nearly flat across tenure bands,
+-- so dividing by a smaller tenure-in-months denominator for newer subscribers
+-- mechanically inflates their "monthly rate" without reflecting real spending
+-- differences) — so tenure is reported as total lifetime revenue instead.
+
+WITH churn_info AS (
+    SELECT
+        subscriber_id,
+        MAX(status_date) AS churn_date
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+    GROUP BY subscriber_id
+),
+
+subscriber_revenue AS (
+    SELECT
+        s.subscriber_id,
+        s.age,
+        s.join_date,
+        p.plan_name,
+        p.plan_type,
+        mr.macro_region_name,
+        sz.zone_name,
+        COALESCE(ci.churn_date, DATE '2025-12-31') AS end_date,
+        COUNT(r.recharge_id) AS total_recharge_count,
+        COALESCE(SUM(r.amount_ngn), 0) AS total_revenue
+    FROM subscribers s
+    JOIN plans p ON p.plan_id = s.plan_id
+    JOIN service_zones sz ON sz.service_zone_id = s.service_zone_id
+    JOIN macro_regions mr ON mr.macro_region_id = sz.macro_region_id
+    LEFT JOIN churn_info ci ON ci.subscriber_id = s.subscriber_id
+    LEFT JOIN recharges r ON r.subscriber_id = s.subscriber_id
+    GROUP BY s.subscriber_id, s.age, s.join_date, p.plan_name, p.plan_type,
+             mr.macro_region_name, sz.zone_name, ci.churn_date
+),
+
+with_derived AS (
+    SELECT
+        *,
+        (end_date - join_date) AS tenure_days,
+        GREATEST((end_date - join_date) / 30.44, 1) AS tenure_months,
+        CASE
+            WHEN age BETWEEN 18 AND 30 THEN '18-30'
+            WHEN age BETWEEN 31 AND 43 THEN '31-43'
+            WHEN age BETWEEN 44 AND 56 THEN '44-56'
+            WHEN age BETWEEN 57 AND 70 THEN '57-70'
+            ELSE 'Unknown'
+        END AS age_band,
+        CASE
+            WHEN (end_date - join_date) < 90 THEN '0-3 months'
+            WHEN (end_date - join_date) < 180 THEN '3-6 months'
+            WHEN (end_date - join_date) < 365 THEN '6-12 months'
+            WHEN (end_date - join_date) < 730 THEN '1-2 years'
+            ELSE '2+ years'
+        END AS tenure_band
+    FROM subscriber_revenue
+),
+
+with_arpu AS (
+    SELECT
+        *,
+        total_revenue / tenure_months AS monthly_arpu_ngn
+    FROM with_derived
+)
+
+-- Plan
+SELECT 'Plan' AS dimension, plan_name AS segment,
+       COUNT(*) AS subscriber_count,
+       ROUND(AVG(monthly_arpu_ngn)::numeric, 2) AS avg_value,
+       'monthly_arpu_ngn' AS metric_type
+FROM with_arpu
+GROUP BY plan_name
+
+UNION ALL
+
+-- Macro Region
+SELECT 'Macro Region', macro_region_name,
+       COUNT(*), ROUND(AVG(monthly_arpu_ngn)::numeric, 2), 'monthly_arpu_ngn'
+FROM with_arpu
+GROUP BY macro_region_name
+
+UNION ALL
+
+-- Service Zone
+SELECT 'Service Zone', zone_name,
+       COUNT(*), ROUND(AVG(monthly_arpu_ngn)::numeric, 2), 'monthly_arpu_ngn'
+FROM with_arpu
+GROUP BY zone_name
+
+UNION ALL
+
+-- Age Band
+SELECT 'Age Band', age_band,
+       COUNT(*), ROUND(AVG(monthly_arpu_ngn)::numeric, 2), 'monthly_arpu_ngn'
+FROM with_arpu
+GROUP BY age_band
+
+UNION ALL
+
+-- Tenure (raw totals, not monthly rate - see note above)
+SELECT 'Tenure', tenure_band,
+       COUNT(*), ROUND(AVG(total_revenue)::numeric, 2), 'avg_total_lifetime_revenue_ngn'
+FROM with_arpu
+WHERE tenure_days >= 30
+GROUP BY tenure_band
+
+ORDER BY dimension, avg_value DESC;
