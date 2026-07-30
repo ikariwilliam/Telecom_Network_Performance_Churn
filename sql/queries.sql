@@ -795,3 +795,163 @@ WHERE tenure_days >= 30
 GROUP BY tenure_band
 
 ORDER BY dimension, avg_value DESC;
+
+-- Q12: Do customer support issues contribute to churn?
+-- Compares churn rate between subscribers who raised support tickets vs. those
+-- who didn't, breaks it down by issue type, and checks whether resolution time
+-- correlates with churn.
+
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+subscriber_ticket_summary AS (
+    SELECT
+        s.subscriber_id,
+        (cf.subscriber_id IS NOT NULL) AS is_churned,
+        COUNT(t.ticket_id) AS ticket_count,
+        AVG(t.resolution_time_hours) AS avg_resolution_time_hrs
+    FROM subscribers s
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = s.subscriber_id
+    LEFT JOIN support_tickets t ON t.subscriber_id = s.subscriber_id
+    GROUP BY s.subscriber_id, cf.subscriber_id
+)
+
+-- Part A: Churn rate, ever raised a ticket vs. never
+SELECT
+    'Had Any Ticket' AS analysis,
+    (ticket_count > 0)::text AS segment,
+    COUNT(*) AS total_subscribers,
+    COUNT(*) FILTER (WHERE is_churned) AS churned_subscribers,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE is_churned) / COUNT(*), 2) AS churn_rate_pct
+FROM subscriber_ticket_summary
+GROUP BY (ticket_count > 0)
+ORDER BY segment DESC;
+
+-- Part B: Churn rate by issue type (subscribers who raised at least one ticket)
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+subscriber_issue AS (
+    SELECT DISTINCT
+        t.subscriber_id,
+        t.issue_type,
+        (cf.subscriber_id IS NOT NULL) AS is_churned
+    FROM support_tickets t
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = t.subscriber_id
+)
+
+SELECT
+    issue_type,
+    COUNT(*) AS subscribers_with_this_issue,
+    COUNT(*) FILTER (WHERE is_churned) AS churned_subscribers,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE is_churned) / COUNT(*), 2) AS churn_rate_pct
+FROM subscriber_issue
+GROUP BY issue_type
+ORDER BY churn_rate_pct DESC;
+
+-- Part C: Does resolution time correlate with churn? (ticket-holders only)
+WITH churn_flags AS (
+    SELECT DISTINCT subscriber_id
+    FROM subscriber_status_history
+    WHERE status = 'Churned'
+),
+
+subscriber_resolution AS (
+    SELECT
+        t.subscriber_id,
+        (cf.subscriber_id IS NOT NULL) AS is_churned,
+        AVG(t.resolution_time_hours) AS avg_resolution_hrs
+    FROM support_tickets t
+    LEFT JOIN churn_flags cf ON cf.subscriber_id = t.subscriber_id
+    WHERE t.resolution_time_hours IS NOT NULL
+    GROUP BY t.subscriber_id, cf.subscriber_id
+)
+
+SELECT
+    is_churned,
+    COUNT(*) AS subscriber_count,
+    ROUND(AVG(avg_resolution_hrs)::numeric, 2) AS avg_resolution_time_hrs
+FROM subscriber_resolution
+GROUP BY is_churned
+ORDER BY is_churned;
+
+-- Q13: Did retention offers successfully reduce churn?
+-- Breaks down offer acceptance/outcome by offer type and offer channel,
+-- to see whether specific offers or delivery methods perform better than others.
+
+WITH latest_status AS (
+    SELECT DISTINCT ON (subscriber_id)
+        subscriber_id,
+        status AS final_status
+    FROM subscriber_status_history
+    ORDER BY subscriber_id, status_date DESC
+)
+
+-- Part A: Outcome by offer type
+SELECT
+    'By Offer Type' AS analysis,
+    ro.offer_type AS segment,
+    COUNT(DISTINCT ro.subscriber_id) AS subscribers_offered,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered') AS recovered,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Churned') AS churned,
+    ROUND(100.0 * COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered')
+          / COUNT(DISTINCT ro.subscriber_id), 2) AS recovery_rate_pct
+FROM retention_offers ro
+JOIN latest_status ls ON ls.subscriber_id = ro.subscriber_id
+GROUP BY ro.offer_type
+ORDER BY recovery_rate_pct DESC;
+-- Part B: Outcome by offer channel
+WITH latest_status AS (
+    SELECT DISTINCT ON (subscriber_id)
+        subscriber_id,
+        status AS final_status
+    FROM subscriber_status_history
+    ORDER BY subscriber_id, status_date DESC
+)
+
+SELECT
+    'By Offer Channel' AS analysis,
+    ro.offer_channel AS segment,
+    COUNT(DISTINCT ro.subscriber_id) AS subscribers_offered,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered') AS recovered,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Churned') AS churned,
+    ROUND(100.0 * COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered')
+          / COUNT(DISTINCT ro.subscriber_id), 2) AS recovery_rate_pct
+FROM retention_offers ro
+JOIN latest_status ls ON ls.subscriber_id = ro.subscriber_id
+GROUP BY ro.offer_channel
+ORDER BY recovery_rate_pct DESC;
+-- Part C: Offer status itself (accepted/declined/pending, if that's what `status` tracks)
+SELECT
+    status,
+    COUNT(*) AS offer_count,
+    ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 2) AS pct_of_offers
+FROM retention_offers
+GROUP BY status
+ORDER BY offer_count DESC;
+-- Part D: Does offer acceptance actually predict recovery?
+WITH latest_status AS (
+    SELECT DISTINCT ON (subscriber_id)
+        subscriber_id,
+        status AS final_status
+    FROM subscriber_status_history
+    ORDER BY subscriber_id, status_date DESC
+)
+
+SELECT
+    ro.status AS offer_status,
+    COUNT(DISTINCT ro.subscriber_id) AS subscribers,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered') AS recovered,
+    COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Churned') AS churned,
+    ROUND(100.0 * COUNT(DISTINCT ro.subscriber_id) FILTER (WHERE ls.final_status = 'Recovered')
+          / COUNT(DISTINCT ro.subscriber_id), 2) AS recovery_rate_pct
+FROM retention_offers ro
+JOIN latest_status ls ON ls.subscriber_id = ro.subscriber_id
+GROUP BY ro.status
+ORDER BY recovery_rate_pct DESC;

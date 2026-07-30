@@ -438,3 +438,91 @@ Ibeju-Lekki highest (₦592.18), Ajah lowest (₦307.31) — no obvious geograph
 - **Region, zone, and age are all weak-to-moderate differentiators**, consistent with their role throughout this analysis (they mattered little for churn either).
 
 **Business Implication:** Plan tier is the clear revenue lever — upselling subscribers from entry plans (Smart Lite/Standard/Max Data, ~₦150-160/month) toward mid/premium tiers (Business Pro, Unlimited 5G, Enterprise Max) would have far more revenue impact than any geographic or demographic targeting strategy. Since high-value plans (Business Pro, Enterprise Max) also had among the lowest churn rates in Q2, retention and upsell efforts could reasonably be combined — premium-plan subscribers appear to be both more valuable and more stable.
+
+### Q12: Do customer support issues contribute to churn?
+
+**Business Question:** Evaluate whether customers who raise support tickets are more likely to churn, and whether issue type or resolution time influences retention.
+
+**Approach:**
+Three tests were run: (1) churn rate comparing subscribers who ever raised a ticket vs. those who never did, (2) churn rate broken down by issue type, and (3) average ticket resolution time compared between churned and active subscribers.
+
+**Findings:**
+
+*Any ticket vs. none:*
+
+| Had a Ticket | Subscribers | Churned | Churn Rate |
+|---|---|---|---|
+| Yes | 69,730 | 10,818 | 15.51% |
+| No | 30,270 | 4,566 | 15.08% |
+
+*By issue type:*
+
+| Issue Type | Subscribers | Churned | Churn Rate |
+|---|---|---|---|
+| Account Issue | 5,887 | 956 | 16.24% |
+| Billing | 16,297 | 2,585 | 15.86% |
+| Network Outage | 11,152 | 1,735 | 15.56% |
+| Poor Signal | 30,310 | 4,711 | 15.54% |
+| Slow Internet | 30,247 | 4,630 | 15.31% |
+| SIM Replacement | 11,430 | 1,742 | 15.24% |
+
+*Resolution time:*
+
+| | Subscribers | Avg Resolution Time (hrs) |
+|---|---|---|
+| Active | 57,811 | 21.98 |
+| Churned | 10,616 | 21.88 |
+
+- **Raising a support ticket has almost no effect on churn** — a 0.43 point gap, well within the range of normal segment-to-segment noise seen throughout this analysis.
+- **Issue type shows minimal spread** (15.24%–16.24%), with Account Issue slightly elevated but based on the smallest subscriber group among the six categories, so this should not be treated as a strong finding without further evidence.
+- **Resolution speed does not predict churn** — churned and active subscribers experienced almost identical average resolution times.
+
+**Business Implication:** Customer support interactions, in this dataset, are not a meaningful churn driver — neither having a support issue at all, the type of issue, nor how quickly it was resolved shows a real relationship with churn. This reinforces the pattern established in Theme 2: churn in this dataset is driven by subscriber behavior (usage and recharge decline, tenure) rather than service-quality touchpoints like network incidents or support experience.
+
+### Q13: Did retention offers successfully reduce churn?
+
+**Business Question:** Measure the effectiveness of different retention campaigns and identify which customer segments responded best. Evaluate offer acceptance rate, churn after offer, and retention by offer type.
+
+**Approach:**
+Retention offer outcomes were evaluated four ways: by offer type, by delivery channel, by the offer's own accepted/rejected status, and by whether acceptance actually predicts recovery.
+
+**Findings:**
+
+*Overall acceptance rate:*
+
+| Offer Status | Count | % of Offers |
+|---|---|---|
+| Accepted | 7,296 | 54.61% |
+| Rejected | 6,064 | 45.39% |
+
+*Does acceptance predict recovery:*
+
+| Offer Status | Subscribers | Recovered | Churned | Recovery Rate |
+|---|---|---|---|---|
+| Accepted | 7,296 | 1,806 | 5,259 | 24.75% |
+| Rejected | 6,064 | 0 | 5,860 | 0.00% |
+
+*By offer type (recovery rate, all offers):*
+
+| Offer Type | Subscribers Offered | Recovered | Recovery Rate |
+|---|---|---|---|
+| Bonus Data | 2,663 | 383 | 14.38% |
+| Loyalty Upgrade | 2,627 | 375 | 14.27% |
+| Device Upgrade | 2,677 | 362 | 13.52% |
+| Discount | 2,710 | 365 | 13.47% |
+| Free Minutes | 2,683 | 321 | 11.96% |
+
+*By offer channel (recovery rate, all offers):*
+
+| Channel | Subscribers Offered | Recovered | Recovery Rate |
+|---|---|---|---|
+| Call Center | 3,339 | 462 | 13.84% |
+| SMS | 3,238 | 442 | 13.65% |
+| App | 3,350 | 452 | 13.49% |
+| Email | 3,433 | 450 | 13.11% |
+
+- **Acceptance is necessary but not sufficient for recovery.** No rejected offer ever resulted in recovery (0.00%), confirming that acceptance is a hard prerequisite. But even among subscribers who accepted, three-quarters (75.25%) still churned — accepting an offer is far from a guarantee of retention.
+- **Offer type and channel both show only mild spread** (11.96%–14.38% for type, 13.11%–13.84% for channel), with Bonus Data and Loyalty Upgrade performing marginally better, and Free Minutes and Email trending weakest. None of these differences are large enough to call one offer type or channel clearly superior.
+- **The real bottleneck is the acceptance-to-recovery conversion, not offer design.** Since type and channel barely move the needle, the retention program's core weakness isn't which offer is sent or how — it's that even a "successful" (accepted) interaction only saves about 1 in 4 subscribers.
+
+**Business Implication:** The retention offer program's biggest lever isn't offer type or delivery channel — both already convert similarly. The real opportunity is improving what happens *after* acceptance, since 75% of subscribers who said yes to an offer still left. This might point to offer value being insufficient (subscribers accept but aren't satisfied enough to stay) or to underlying issues (the same usage/recharge decline from Q1/Q10) that a one-time offer doesn't actually resolve. Combined with Q4's finding that most churners were reached with an offer (72.28%) but still left, this dataset consistently points to offer *effectiveness*, not offer *reach* or *type*, as the core retention gap.
